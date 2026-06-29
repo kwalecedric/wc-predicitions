@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>World Cup Prediction Leaderboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1115;
+    --panel:#161922;
+    --panel-2:#1c2030;
+    --border:#272c3a;
+    --text:#e9eaf0;
+    --text-dim:#8e93a8;
+    --accent:#5b8cff;
+    --accent-soft:rgba(91,140,255,0.12);
+    --gold:#e8b923;
+    --gold-soft:rgba(232,185,35,0.10);
+    --danger:#ff6b6b;
+    --good:#3ddc84;
+    --radius:14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Roboto, -apple-system, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin:0;
+    padding: 32px 20px 60px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  .hero { margin-bottom: 28px; display:flex; justify-content:space-between; align-items:flex-start; gap: 16px; flex-wrap: wrap; }
+  .hero h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .hero h1 .dot { width:10px; height:10px; border-radius:50%; background: var(--accent); display:inline-block; }
+  .hero p { color: var(--text-dim); margin:0; font-size: 14px; max-width: 600px; line-height:1.5; }
+
+  .syncstatus {
+    display:flex; align-items:center; gap:8px; font-size:12.5px; color: var(--text-dim);
+    background: var(--panel-2); border:1px solid var(--border); border-radius: 20px; padding: 6px 14px; white-space:nowrap;
+  }
+  .syncdot { width:8px; height:8px; border-radius:50%; background: var(--text-dim); }
+  .syncdot.live { background: var(--good); box-shadow: 0 0 0 0 rgba(61,220,132,0.5); animation: pulse 2s infinite; }
+  .syncdot.error { background: var(--danger); }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(61,220,132,0.4); }
+    70% { box-shadow: 0 0 0 5px rgba(61,220,132,0); }
+    100% { box-shadow: 0 0 0 0 rgba(61,220,132,0); }
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin-bottom: 22px;
+  }
+  .card h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+  }
+  .card .hint { color: var(--text-dim); font-size: 13px; margin: 4px 0 16px; line-height:1.5; }
+
+  .dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 26px;
+    text-align: center;
+    background: var(--panel-2);
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+    position: relative;
+  }
+  .dropzone:hover { border-color: var(--accent); background: rgba(91,140,255,0.05); }
+  .dropzone .icon { font-size: 22px; margin-bottom: 8px; opacity: .8; }
+  .dropzone .main { font-size: 14px; font-weight: 500; }
+  .dropzone .sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  input[type=file] {
+    position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;
+  }
+
+  .filelist { margin-top: 16px; display:flex; flex-direction:column; gap:8px; }
+  .fileitem {
+    display:flex; align-items:center; justify-content:space-between;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  .fileitem .fname { font-weight: 500; }
+  .fileitem .fmeta { color: var(--text-dim); margin-left: 8px; }
+  .fileitem .fmeta.bad { color: var(--danger); }
+  .removeBtn {
+    background: none; border: none; color: var(--text-dim); cursor: pointer;
+    font-size: 12px; padding: 4px 8px; border-radius: 6px;
+  }
+  .removeBtn:hover { color: var(--danger); background: rgba(255,107,107,0.08); }
+
+  table { width:100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align:left; color: var(--text-dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  td { padding: 11px 12px; border-bottom: 1px solid var(--border); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  .scroll { max-height: 440px; overflow:auto; border-radius: 10px; }
+
+  .rankcell { display:flex; align-items:center; gap:8px; font-weight:600; }
+  .medal { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+  .medal.gold { background: var(--gold-soft); color: var(--gold); }
+  .medal.silver { background: rgba(192,197,210,0.12); color: #c0c5d2; }
+  .medal.bronze { background: rgba(214,138,79,0.12); color: #d68a4f; }
+  .medal.none { color: var(--text-dim); font-weight: 500; }
+
+  .pts { text-align:right; font-weight:700; color: var(--text); font-variant-numeric: tabular-nums; }
+  tr.top td.pts { color: var(--gold); }
+
+  .badge {
+    display:inline-flex; align-items:center; gap:6px;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: 12px; font-weight: 600;
+    padding: 4px 10px; border-radius: 20px;
+  }
+
+  .btnrow { margin-top: 16px; display:flex; gap: 10px; }
+  button.primary, button.secondary {
+    font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 9px; cursor:pointer; border: 1px solid transparent;
+    transition: opacity .15s ease, transform .1s ease;
+  }
+  button.primary { background: var(--accent); color: #fff; }
+  button.secondary { background: transparent; color: var(--text); border-color: var(--border); }
+  button.primary:hover, button.secondary:hover { opacity: .88; }
+  button:active { transform: scale(0.98); }
+
+  .empty { color: var(--text-dim); font-size: 13px; padding: 30px 10px; text-align:center; }
+  .name-cell { font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <div>
+      <h1><span class="dot"></span>World Cup Prediction Leaderboard</h1>
+      <p>Upload scored match files (Name + Score columns) — everything syncs live to the group, so anyone with this link sees the same up-to-date leaderboard.</p>
+    </div>
+    <div class="syncstatus" id="syncStatus"><span class="syncdot" id="syncDot"></span><span id="syncText">Connecting…</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Upload files</h2>
+    <p class="hint">Each file needs a column with names and a column with the points already assigned (e.g. <b>Name</b> + <b>Score</b>, or <b>Name</b> + <b>Points</b>). Upload your baseline totals first, then add new match files any time — nothing overwrites, it all accumulates, and it saves automatically.</p>
+    <div class="dropzone">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple />
+      <div class="icon">⬆</div>
+      <div class="main">Click to choose files, or drop them here</div>
+      <div class="sub">.xlsx, .xls or .csv — multiple files at once is fine</div>
+    </div>
+    <div class="filelist" id="filelist"></div>
+  </div>
+
+  <div class="card" id="leaderboardCard" style="display:none;">
+    <h2>Leaderboard <span class="badge" id="matchCount"></span></h2>
+    <div class="scroll">
+      <table class="leaderboard">
+        <thead><tr><th style="width:70px;">Rank</th><th>Name</th><th style="text-align:right;">Total points</th></tr></thead>
+        <tbody id="leaderboardBody"></tbody>
+      </table>
+    </div>
+    <div class="btnrow">
+      <button class="secondary" id="exportBtn">Export to Excel</button>
+      <button class="secondary" id="resetBtn" style="color: var(--danger); border-color: rgba(255,107,107,0.3);">Reset leaderboard</button>
+    </div>
+  </div>
+
+  <div class="card" id="breakdownCard" style="display:none;">
+    <h2>Per-file breakdown</h2>
+    <div class="scroll">
+      <table id="breakdownTable">
+        <thead><tr id="breakdownHead"></tr></thead>
+        <tbody id="breakdownBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBeiz_GkQvdIVpIkTGsTw_OzsKGJ1MJHoA",
+  authDomain: "wc-predictions-38032.firebaseapp.com",
+  projectId: "wc-predictions-38032",
+  storageBucket: "wc-predictions-38032.firebasestorage.app",
+  messagingSenderId: "705297573841",
+  appId: "1:705297573841:web:ed361d7ac8b506b64722f0"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const leaderboardDocRef = doc(db, "leaderboards", "shared");
+
+const syncDot = document.getElementById('syncDot');
+const syncText = document.getElementById('syncText');
+
+let files = []; // {name, data: {personName: score}, ok}
+let suppressNextSave = false; // avoid re-saving data we just received from a snapshot
+
+function setSyncStatus(state, msg){
+  syncDot.className = 'syncdot' + (state === 'live' ? ' live' : state === 'error' ? ' error' : '');
+  syncText.textContent = msg;
+}
+
+// Listen for live updates from anyone in the group
+onSnapshot(leaderboardDocRef, (snap)=>{
+  if(snap.exists()){
+    const remote = snap.data();
+    if(Array.isArray(remote.files)){
+      suppressNextSave = true;
+      files = remote.files;
+      renderFileList();
+      recalc();
+    }
+  }
+  setSyncStatus('live', 'Synced — live with the group');
+}, (err)=>{
+  console.error(err);
+  setSyncStatus('error', 'Sync error — changes stay local only');
+});
+
+async function saveToFirestore(){
+  if(suppressNextSave){ suppressNextSave = false; return; }
+  try{
+    setSyncStatus('', 'Saving…');
+    await setDoc(leaderboardDocRef, { files, updatedAt: Date.now() });
+    setSyncStatus('live', 'Synced — live with the group');
+  } catch(err){
+    console.error(err);
+    setSyncStatus('error', 'Could not save — check connection');
+  }
+}
+
+function normHeader(h){ return String(h).toLowerCase().replace(/[^a-z0-9]/g,''); }
+
+function findCol(headers, candidates){
+  const norm = headers.map(normHeader);
+  for(const c of candidates){
+    const idx = norm.indexOf(normHeader(c));
+    if(idx !== -1) return idx;
+  }
+  for(let i=0;i<norm.length;i++){
+    for(const c of candidates){
+      if(norm[i].includes(normHeader(c))) return i;
+    }
+  }
+  return -1;
+}
+
+document.getElementById('fileInput').addEventListener('change', function(e){
+  const fileObjs = Array.from(e.target.files);
+  let remaining = fileObjs.length;
+  fileObjs.forEach(file=>{
+    const reader = new FileReader();
+    reader.onload = function(evt){
+      try{
+        const data = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, {header:1});
+        const headers = rows[0];
+        const nameCol = findCol(headers, ['name','fullname','player']);
+        const scoreCol = findCol(headers, ['score','points','pts','total']);
+
+        const matchScores = {};
+        if(nameCol >= 0 && scoreCol >= 0){
+          rows.slice(1).forEach(r=>{
+            if(!r || r.length===0) return;
+            const nm = String(r[nameCol]||'').trim();
+            const sc = parseFloat(r[scoreCol]);
+            if(nm && !isNaN(sc)){
+              matchScores[nm] = (matchScores[nm]||0) + sc;
+            }
+          });
+        }
+        files.push({
+          name: file.name.replace(/\.(xlsx|xls|csv)$/i,''),
+          data: matchScores,
+          ok: nameCol>=0 && scoreCol>=0
+        });
+      } catch(err){
+        files.push({name: file.name, data:{}, ok:false});
+      }
+      remaining--;
+      if(remaining===0){ renderFileList(); recalc(); saveToFirestore(); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  e.target.value = '';
+});
+
+function renderFileList(){
+  const el = document.getElementById('filelist');
+  el.innerHTML = '';
+  files.forEach((f, i)=>{
+    const div = document.createElement('div');
+    div.className = 'fileitem';
+    const meta = f.ok
+      ? `<span class="fmeta">${Object.keys(f.data).length} people</span>`
+      : `<span class="fmeta bad">couldn't find Name/Score columns</span>`;
+    div.innerHTML = `<span><span class="fname">${f.name}</span>${meta}</span>`;
+    const btn = document.createElement('button');
+    btn.className = 'removeBtn';
+    btn.textContent = 'Remove';
+    btn.onclick = ()=>{ files.splice(i,1); renderFileList(); recalc(); saveToFirestore(); };
+    div.appendChild(btn);
+    el.appendChild(div);
+  });
+}
+
+function medalFor(rank){
+  if(rank===1) return '<span class="medal gold">1</span>';
+  if(rank===2) return '<span class="medal silver">2</span>';
+  if(rank===3) return '<span class="medal bronze">3</span>';
+  return `<span class="medal none">${rank}</span>`;
+}
+
+function recalc(){
+  const totals = {};
+  const breakdown = {};
+  files.forEach(f=>{
+    Object.entries(f.data || {}).forEach(([name, score])=>{
+      totals[name] = (totals[name]||0) + score;
+      if(!breakdown[name]) breakdown[name] = {};
+      breakdown[name][f.name] = score;
+    });
+  });
+
+  const sorted = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+  const body = document.getElementById('leaderboardBody');
+  body.innerHTML = '';
+  sorted.forEach((entry, i)=>{
+    const tr = document.createElement('tr');
+    if(i===0) tr.className = 'top';
+    tr.innerHTML = `<td><div class="rankcell">${medalFor(i+1)}</div></td><td class="name-cell">${entry[0]}</td><td class="pts">${entry[1]}</td>`;
+    body.appendChild(tr);
+  });
+  document.getElementById('matchCount').textContent = files.length + ' file(s) loaded';
+  document.getElementById('leaderboardCard').style.display = sorted.length ? 'block' : 'none';
+
+  const matchNames = files.map(f=>f.name);
+  const head = document.getElementById('breakdownHead');
+  head.innerHTML = '<th>Name</th>' + matchNames.map(m=>`<th style="text-align:right;">${m}</th>`).join('') + '<th style="text-align:right;">Total</th>';
+  const bbody = document.getElementById('breakdownBody');
+  bbody.innerHTML = '';
+  Object.keys(breakdown).forEach(name=>{
+    const row = breakdown[name];
+    let total = 0;
+    const cells = matchNames.map(m=>{ const v = row[m]||0; total+=v; return `<td class="pts">${v}</td>`; }).join('');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="name-cell">${name}</td>${cells}<td class="pts">${total}</td>`;
+    bbody.appendChild(tr);
+  });
+  document.getElementById('breakdownCard').style.display = matchNames.length ? 'block' : 'none';
+
+  window._totals = totals;
+  window._breakdown = breakdown;
+  window._matchNames = matchNames;
+}
+
+document.getElementById('resetBtn').addEventListener('click', async function(){
+  if(!files.length){ alert('Nothing to reset — no files loaded yet.'); return; }
+  const sure = confirm('This clears the entire shared leaderboard for everyone — all uploaded files and totals. This cannot be undone. Continue?');
+  if(!sure) return;
+  files = [];
+  renderFileList();
+  recalc();
+  await saveToFirestore();
+});
+
+document.getElementById('exportBtn').addEventListener('click', function(){
+  if(!window._totals || !Object.keys(window._totals).length){ alert('Upload at least one scored file first.'); return; }
+  const wb = XLSX.utils.book_new();
+
+  const lbData = [['Rank','Name','Total points']];
+  Object.entries(window._totals).sort((a,b)=>b[1]-a[1]).forEach((e,i)=> lbData.push([i+1, e[0], e[1]]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(lbData), 'Leaderboard');
+
+  const bdHeader = ['Name', ...window._matchNames, 'Total'];
+  const bdData = [bdHeader];
+  Object.entries(window._breakdown).forEach(([name, row])=>{
+    let total = 0;
+    const cells = window._matchNames.map(m=>{ const v = row[m]||0; total+=v; return v; });
+    bdData.push([name, ...cells, total]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bdData), 'Breakdown');
+
+  XLSX.writeFile(wb, 'wc_leaderboard.xlsx');
+});
+</script>
+</body>
+</html>
